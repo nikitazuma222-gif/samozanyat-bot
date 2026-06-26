@@ -17,15 +17,24 @@ from telegram.ext import (
     Application, CommandHandler, MessageHandler,
     filters, ContextTypes, ConversationHandler, CallbackQueryHandler
 )
-from admin_commands import stats, users, user_info
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 OPENROUTER_KEY = os.getenv("OPENROUTER_KEY")
 ADMIN_USERNAME = "milorky"
+ADMIN_ID = int(os.getenv("ADMIN_ID", "2120657855"))  # твой Telegram ID, уже вписан
 FREE_LIMIT = 2
 user_data = {}
+
+def is_admin(user) -> bool:
+    """Проверка админа по числовому ID (надёжно) + по username (запасной вариант)."""
+    if ADMIN_ID and user.id == ADMIN_ID:
+        return True
+    if user.username and user.username.lower() == ADMIN_USERNAME.lower():
+        return True
+    return False
 
 # Состояния
 (CHOOSE_DOC,
@@ -64,7 +73,7 @@ def S(bold=False, size=9, align=TA_LEFT, color='#222222', space=3):
 
 def get_user(uid):
     if uid not in user_data:
-        user_data[uid] = {"count": 0, "paid": False}
+        user_data[uid] = {"count": 0, "paid": False, "last_activity": datetime.now().strftime('%d.%m.%Y %H:%M')}
     return user_data[uid]
 
 def can_generate(uid):
@@ -145,7 +154,7 @@ def footer_block(story):
     story.append(Spacer(1,0.4*cm))
     story.append(HRFlowable(width="100%", thickness=0.5, color=colors.HexColor('#eeeeee')))
     story.append(Spacer(1,0.2*cm))
-    story.append(Paragraph("Документ сформирован автоматически  •  @samozanybot",
+    story.append(Paragraph("Документ сформирован автоматически  •  @samozanyat_bot",
                            S(size=7, align=TA_CENTER, color='#aaaaaa')))
 
 def build_pdf(story) -> bytes:
@@ -438,6 +447,59 @@ async def send_pdf(update, context, doc_type):
         await update.message.reply_text("❌ Ошибка. Попробуйте: /new")
     return ConversationHandler.END
 
+# ====== АДМИН-КОМАНДЫ ======
+
+async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update.effective_user):
+        await update.message.reply_text("⛔️ Доступ запрещён.")
+        return
+    total = len(user_data)
+    paid = sum(1 for u in user_data.values() if u.get("paid", False))
+    used = sum(1 for u in user_data.values() if u.get("count", 0) > 0)
+    await update.message.reply_text(
+        f"📊 *Статистика бота*\n\n"
+        f"👥 Всего пользователей: {total}\n"
+        f"📄 Создали документы: {used}\n"
+        f"💳 Активных подписок: {paid}",
+        parse_mode='Markdown'
+    )
+
+async def users(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update.effective_user):
+        await update.message.reply_text("⛔️ Доступ запрещён.")
+        return
+    if not user_data:
+        await update.message.reply_text("Пока нет пользователей.")
+        return
+    msg = "📋 *Последние пользователи:*\n\n"
+    for uid, data in list(user_data.items())[-10:]:
+        msg += f"• `{uid}` — документов: {data.get('count',0)}, подписка: {'✅' if data.get('paid',False) else '❌'}\n"
+    await update.message.reply_text(msg, parse_mode='Markdown')
+
+async def user_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update.effective_user):
+        await update.message.reply_text("⛔️ Доступ запрещён.")
+        return
+    if not context.args:
+        await update.message.reply_text("Укажи ID: /user 123456789")
+        return
+    try:
+        uid = int(context.args[0])
+        data = user_data.get(uid)
+        if not data:
+            await update.message.reply_text("Пользователь не найден.")
+            return
+        await update.message.reply_text(
+            f"🔍 *Пользователь* `{uid}`\n\n"
+            f"📄 Документов: {data.get('count',0)}\n"
+            f"💳 Подписка: {'✅ Активна' if data.get('paid',False) else '❌ Нет'}\n"
+            f"🕐 Последняя активность: {data.get('last_activity', 'неизвестно')}",
+            parse_mode='Markdown'
+        )
+    except:
+        await update.message.reply_text("Ошибка: ID должен быть числом")
+
+# ====== КОНЕЦ АДМИН-КОМАНД ======
 
 # ====== HANDLERS ======
 
@@ -649,7 +711,8 @@ async def my_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode='Markdown')
 
 async def activate_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if update.effective_user.username != ADMIN_USERNAME: return
+    if not is_admin(update.effective_user):
+        return
     try:
         tid = int(context.args[0])
         get_user(tid)["paid"] = True
@@ -722,13 +785,12 @@ def main():
     app.add_handler(CommandHandler("myid", my_id))
     app.add_handler(CommandHandler("activate_id", activate_id))
     app.add_handler(CallbackQueryHandler(button_handler))
+    app.add_handler(CommandHandler("stats", stats))
+    app.add_handler(CommandHandler("users", users))
+    app.add_handler(CommandHandler("user", user_info))
     app.add_handler(conv)
-    
-app.add_handler(CommandHandler("stats", stats))
-app.add_handler(CommandHandler("users", users))
-app.add_handler(CommandHandler("user", user_info))
 
-logger.info("Bot started")
+    logger.info("Bot started")
     app.run_polling()
 
 if __name__ == "__main__":
