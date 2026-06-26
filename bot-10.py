@@ -17,7 +17,7 @@ from telegram.ext import (
     Application, CommandHandler, MessageHandler,
     filters, ContextTypes, ConversationHandler, CallbackQueryHandler
 )
-
+from admin_commands import stats, users, user_info
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -723,8 +723,12 @@ def main():
     app.add_handler(CommandHandler("activate_id", activate_id))
     app.add_handler(CallbackQueryHandler(button_handler))
     app.add_handler(conv)
+    
+app.add_handler(CommandHandler("stats", stats))
+app.add_handler(CommandHandler("users", users))
+app.add_handler(CommandHandler("user", user_info))
 
-    logger.info("Bot started")
+logger.info("Bot started")
     app.run_polling()
 
 if __name__ == "__main__":
