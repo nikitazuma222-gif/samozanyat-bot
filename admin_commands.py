@@ -28,7 +28,7 @@ async def users(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     msg = "📋 *Последние пользователи:*\n\n"
     for uid, data in list(user_data.items())[-10:]:
-        msg += f"• `{uid}` — документов: {data.get('count',0)}, подписка: {'✅' if data.get('paid',False) else '❌'}\n"
+        msg += f"• {uid} — документов: {data.get('count',0)}, подписка: {'✅' if data.get('paid',False) else '❌'}\n"
     await update.message.reply_text(msg, parse_mode='Markdown')
 
 async def user_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -45,7 +45,7 @@ async def user_info(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text("Пользователь не найден.")
             return
         await update.message.reply_text(
-            f"🔍 *Пользователь* `{uid}`\n\n"
+            f"🔍 *Пользователь* {uid}\n\n"
             f"📄 Документов: {data.get('count',0)}\n"
             f"💳 Подписка: {'✅ Активна' if data.get('paid',False) else '❌ Нет'}\n"
             f"🕐 Последняя активность: {data.get('last_activity', 'неизвестно')}",
